@@ -5,7 +5,7 @@
  */
 import http from 'node:http'
 
-const PORT = Number(process.env.PORT) || 8787
+const PORT = process.env.PORT || 10000
 
 /** Hapësirat e panevojshme në .env bëjnë që çelësi të duket i vendosur por Bearer dërgohet bosh — OpenRouter: "Missing Authentication header". */
 function cleanEnvKey(name) {
@@ -610,8 +610,6 @@ const server = http.createServer(async (req, res) => {
   }
 })
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(
-    `JUEJ AI Code — proxy: http://127.0.0.1:${PORT}/api/chat | http://127.0.0.1:${PORT}/api/ai`,
-  )
+server.listen(PORT, '0.0.0.0', () => {
+  console.log('Server running on port ' + PORT)
 })
