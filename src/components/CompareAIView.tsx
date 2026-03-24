@@ -78,9 +78,13 @@ function buildMergePrompt(resA: string, resB: string): string {
 Combine these two answers into ONE best answer.
 
 Rules:
-- Keep best parts, remove repetition, improve clarity.
-- If either answer includes HTML/CSS/JS for browser UI, your merged answer MUST use three separate markdown fences in this exact order: \`\`\`html (body inner content only), \`\`\`css, \`\`\`javascript or \`\`\`js — then a short explanation outside fences. Include empty css/js fences if unused. Never mix HTML+CSS+JS in one fence unless the user explicitly asked for that.
-- For non-UI code, use appropriate fenced language tag(s) and then explanation.
+- Keep best parts
+- Remove repetition
+- Improve clarity
+- Structure output:
+  1. Final Code
+  2. Explanation
+  3. Improvements
 
 Answer A:
 ${resA}

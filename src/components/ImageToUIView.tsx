@@ -10,14 +10,12 @@ import {
 } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import {
-  apiUrl,
-  productionNeedsApiBaseUrlBanner,
-} from '../lib/apiBase'
+import { apiUrl } from '../lib/apiBase'
 import { useCopyFeedback } from '../hooks/useCopyFeedback'
-import { OPENROUTER_VISION_MODEL_SLUG } from '../lib/openRouterConstants'
+import { OPENROUTER_CHAT_MODEL_SLUG } from '../lib/openRouterConstants'
 import { logOpenRouterRequest } from '../lib/openRouterDebug'
-import { openRouterBearerFromStoredKey } from '../lib/openRouterAuthHeaders'
+import { optionalOpenRouterBearerHeaders } from '../lib/openRouterAuthHeaders'
+import { getEffectiveOpenRouterKey } from '../lib/storage'
 import type { AppSettings } from '../types'
 
 const ACCEPT = 'image/png,image/jpeg,image/jpg'
@@ -42,9 +40,7 @@ You MUST return your answer in this exact structure:
 
 2) A markdown fenced code block with language tag css containing all styles needed.
 
-3) A markdown fenced code block with language tag javascript (or js). Use it for any client-side behavior; if none is needed, include an empty block or a comment only — the fence must still be present.
-
-4) A section starting with the heading ## Explanation (markdown h2) that describes:
+3) A section starting with the heading ## Explanation (markdown h2) that describes:
    - Layout structure
    - Main UI components
    - Colors and typography choices
@@ -68,7 +64,6 @@ function extractFence(text: string, lang: string): string | null {
 function parseAiOutput(raw: string): {
   html: string
   css: string
-  js: string
   explanation: string
 } {
   let html =
@@ -76,8 +71,6 @@ function parseAiOutput(raw: string): {
     extractFence(raw, 'htm') ??
     null
   let css = extractFence(raw, 'css') ?? null
-  let js =
-    extractFence(raw, 'javascript') ?? extractFence(raw, 'js') ?? null
 
   if (!html) {
     const generic = raw.match(/```(?:\w+)?\s*\n([\s\S]*?)```/)
@@ -100,20 +93,15 @@ function parseAiOutput(raw: string): {
   return {
     html: html ?? '<!-- Could not parse HTML from response -->',
     css: css ?? '/* Could not parse CSS from response */',
-    js: js ?? '',
     explanation,
   }
 }
 
 /** Full HTML document for iframe — mimics a real page. */
-function buildSrcDoc(html: string, css: string, js: string): string {
-  const safeCss = css.replace(/<\/style>/gi, '<\\/style>')
-  const safeJs = (js || '').replace(/<\/script>/gi, '<\\/script>')
+function buildSrcDoc(html: string, css: string): string {
+  const safeCss = css.replace(/<\/style/gi, '<\\/style')
   const base = `*,*::before,*::after{box-sizing:border-box}html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}body{margin:0}`
-  const scriptBlock = safeJs.trim()
-    ? `<script>${safeJs}<\/script>`
-    : ''
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><style>${base}\n${safeCss}</style></head><body>${html}${scriptBlock}</body></html>`
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><style>${base}\n${safeCss}</style></head><body>${html}</body></html>`
 }
 
 const EMPTY_PREVIEW_DOC =
@@ -280,93 +268,22 @@ const BrowserPreviewFrame = memo(function BrowserPreviewFrame({
 
 BrowserPreviewFrame.displayName = 'BrowserPreviewFrame'
 
-/** Firebase / SPA: përgjigja ishte index.html, jo JSON. */
-const ERR_HOSTING_SPA_FALLBACK = 'HOSTING_SPA_FALLBACK_NO_JSON_API'
-const ERR_INVALID_API_JSON = 'INVALID_API_JSON_BODY'
-
 function humanizeImageToUiError(message: string): string {
   const m = message.trim()
-  if (m === ERR_HOSTING_SPA_FALLBACK) {
-    return 'Në këtë sajt (Firebase) nuk ka server për /api/ai — kthehet faqja e aplikacionit në vend të JSON. Zgjidhje: vendos në .env.production VITE_API_BASE_URL=https://URL-e-serverit-tënd (Node me /api/ai + OPENROUTER_API_KEY), pastaj npm run build dhe ridploy. Lokal: npm run server dhe VITE_OPENAI_PROXY=true.'
-  }
-  if (m === ERR_INVALID_API_JSON) {
-    return 'Përgjigja nga serveri nuk ishte JSON i pritshëm (shpesh për shkak të mungesës së backend-it në prodhim). Kontrollo VITE_API_BASE_URL dhe që /api/ai kthejë { output } ose { reply }.'
-  }
   if (/did not match the expected pattern/i.test(m)) {
     return 'The image could not be processed. Try a smaller PNG or JPG, or re-export the screenshot.'
   }
   if (/missing authentication header|401/i.test(m)) {
-    return 'Mungon çelësi OpenRouter. Fut OpenRouter API key te Cilësimet (ruhet edhe kur OpenRouter është off), ose vendos OPENROUTER_API_KEY në serverin e proxy-t.'
+    return 'Mungon çelësi OpenRouter. Aktivizo OpenRouter te Cilësimet dhe fut API key, ose vendos OPENROUTER_API_KEY në serverin e proxy-t.'
   }
   return m
-}
-
-/**
- * Lexon trupin e përgjigjes së suksessit: { output|reply }, ose formë OpenAI-style { choices[0].message.content }.
- */
-function extractReplyFromApiSuccessBody(raw: string): string {
-  const t = raw.trim()
-  if (!t) {
-    throw new Error(ERR_HOSTING_SPA_FALLBACK)
-  }
-  const head = t.slice(0, 800).toLowerCase()
-  if (
-    head.includes('<!doctype html') ||
-    (head.includes('<html') && head.includes('</head>'))
-  ) {
-    throw new Error(ERR_HOSTING_SPA_FALLBACK)
-  }
-
-  let data: unknown
-  try {
-    data = JSON.parse(t)
-  } catch {
-    throw new Error(ERR_INVALID_API_JSON)
-  }
-
-  if (typeof data !== 'object' || data === null) {
-    throw new Error(ERR_INVALID_API_JSON)
-  }
-
-  const o = data as Record<string, unknown>
-  const direct = o.output ?? o.reply
-  if (typeof direct === 'string' && direct.trim()) {
-    return direct
-  }
-
-  const choices = o.choices
-  if (Array.isArray(choices) && choices[0] && typeof choices[0] === 'object') {
-    const first = choices[0] as {
-      message?: { content?: unknown }
-    }
-    const c = first.message?.content
-    if (typeof c === 'string' && c.trim()) {
-      return c
-    }
-    if (Array.isArray(c)) {
-      const text = c
-        .filter(
-          (p): p is { type: string; text: string } =>
-            typeof p === 'object' &&
-            p !== null &&
-            (p as { type?: string }).type === 'text' &&
-            typeof (p as { text?: string }).text === 'string',
-        )
-        .map((p) => p.text)
-        .join('')
-      if (text.trim()) return text
-    }
-  }
-
-  throw new Error(ERR_INVALID_API_JSON)
 }
 
 async function postImageToUi(
   payload: {
     model: string
     prompt: string
-    /** Data URL e plotë: data:image/jpeg;base64,... (si `image` në /api/ai). */
-    image: string
+    imageDataUrl: string
   },
   authHeaders: Record<string, string>,
 ): Promise<string> {
@@ -395,53 +312,31 @@ async function postImageToUi(
     )
   }
   if (!res.ok) {
-    const rawText = await res.text()
     let msg = res.statusText || 'Request failed'
     try {
-      const j = JSON.parse(rawText) as {
-        error?: { message?: string } | string
-        message?: string
-      }
-      console.error('[ImageToUI] /api/ai error', res.status, rawText)
-      if (typeof j.error === 'object' && j.error !== null && 'message' in j.error) {
-        const em = (j.error as { message?: string }).message
-        if (typeof em === 'string') msg = em
-        else msg = JSON.stringify(j.error).slice(0, 400)
-      } else if (typeof j.error === 'string') msg = j.error
-      else if (j.error != null && typeof j.error === 'object')
-        msg = JSON.stringify(j.error).slice(0, 400)
-      else if (typeof j.message === 'string') msg = j.message
+      const j = (await res.json()) as { error?: { message?: string } }
+      if (j.error?.message) msg = j.error.message
     } catch {
-      console.error('[ImageToUI] /api/ai error (non-JSON)', res.status, rawText)
-      if (rawText.trim()) msg = rawText.slice(0, 500)
+      /* ignore */
     }
     throw new Error(humanizeImageToUiError(msg))
   }
-
-  const rawBody = await res.text()
-  let out: string
+  let data: { output?: string; reply?: string }
   try {
-    out = extractReplyFromApiSuccessBody(rawBody)
-  } catch (e) {
-    const code = e instanceof Error ? e.message : ''
-    if (code === ERR_HOSTING_SPA_FALLBACK || code === ERR_INVALID_API_JSON) {
-      console.error('[ImageToUI] Bad success body (first 400 chars):', rawBody.slice(0, 400))
-      throw new Error(humanizeImageToUiError(code))
-    }
+    data = (await res.json()) as { output?: string; reply?: string }
+  } catch {
     throw new Error('Invalid response from API. Try again.')
   }
-  if (!out.trim()) {
+  const out = data.output ?? data.reply
+  if (typeof out !== 'string' || !out.trim()) {
     throw new Error('The model returned an empty response. Try again.')
   }
   return out
 }
 
-/** Target max length for data URL to stay under typical provider limits after JSON wrapping. */
-const MAX_DATA_URL_CHARS = 4_200_000
-
 /**
- * Produces a data URL for `POST /api/ai` body field `image` (same as `readAsDataURL`, plus resize/JPEG).
- * Shembull i thjeshtë me FileReader: `new Promise((r, j) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = j; fr.readAsDataURL(file); })`.
+ * Decode, optionally downscale, and re-encode as JPEG data URL for OpenRouter vision
+ * (IANA image/jpeg + stable base64; avoids blob: URLs and bad MIME from the OS).
  */
 async function prepareImageForVision(file: File): Promise<string> {
   if (file.size > MAX_BYTES) {
@@ -466,57 +361,36 @@ async function prepareImageForVision(file: File): Promise<string> {
     throw new Error('Could not read this image. Try another PNG or JPG.')
   }
 
-  try {
-    const iw = bitmap.width
-    const ih = bitmap.height
-    if (iw < 1 || ih < 1) {
-      throw new Error('This image has invalid dimensions.')
-    }
-
-    let tw = iw
-    let th = ih
-    const maxSide0 = Math.max(tw, th)
-    if (maxSide0 > MAX_VISION_SIDE) {
-      const scale = MAX_VISION_SIDE / maxSide0
-      tw = Math.max(1, Math.round(tw * scale))
-      th = Math.max(1, Math.round(th * scale))
-    }
-
-    let quality = 0.88
-
-    const encode = (): string => {
-      const canvas = document.createElement('canvas')
-      canvas.width = tw
-      canvas.height = th
-      const ctx = canvas.getContext('2d')
-      if (!ctx) throw new Error('Could not process the image in this browser.')
-      ctx.drawImage(bitmap, 0, 0, tw, th)
-      return canvas.toDataURL('image/jpeg', quality)
-    }
-
-    let dataUrl = encode()
-    while (dataUrl.length > MAX_DATA_URL_CHARS && quality > 0.48) {
-      quality -= 0.08
-      dataUrl = encode()
-    }
-    while (
-      dataUrl.length > MAX_DATA_URL_CHARS &&
-      Math.max(tw, th) > 720
-    ) {
-      tw = Math.max(480, Math.round(tw * 0.82))
-      th = Math.max(480, Math.round(th * 0.82))
-      quality = Math.min(quality, 0.72)
-      dataUrl = encode()
-    }
-
-    const compact = dataUrl.replace(/\s/g, '')
-    if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(compact)) {
-      throw new Error('Could not encode the image for upload. Try another file.')
-    }
-    return dataUrl
-  } finally {
+  let w = bitmap.width
+  let h = bitmap.height
+  if (w < 1 || h < 1) {
     bitmap.close()
+    throw new Error('This image has invalid dimensions.')
   }
+  const maxSide = Math.max(w, h)
+  if (maxSide > MAX_VISION_SIDE) {
+    const scale = MAX_VISION_SIDE / maxSide
+    w = Math.round(w * scale)
+    h = Math.round(h * scale)
+  }
+
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    bitmap.close()
+    throw new Error('Could not process the image in this browser.')
+  }
+  ctx.drawImage(bitmap, 0, 0, w, h)
+  bitmap.close()
+
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.88)
+  const compact = dataUrl.replace(/\s/g, '')
+  if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(compact)) {
+    throw new Error('Could not encode the image for upload. Try another file.')
+  }
+  return dataUrl
 }
 
 export interface ImageToUIViewProps {
@@ -534,7 +408,6 @@ export default function ImageToUIView({
 
   const [html, setHtml] = useState('')
   const [css, setCss] = useState('')
-  const [js, setJs] = useState('')
   const [explanation, setExplanation] = useState('')
   const [rawReply, setRawReply] = useState<string | null>(null)
 
@@ -554,7 +427,6 @@ export default function ImageToUIView({
       setRawReply(null)
       setHtml('')
       setCss('')
-      setJs('')
       setExplanation('')
       setApiError(null)
     } catch (e) {
@@ -575,6 +447,11 @@ export default function ImageToUIView({
 
   const generate = useCallback(async () => {
     if (!dataUrl || isBusy) return
+    if (settings.useOpenRouter && !getEffectiveOpenRouterKey(settings)) {
+      setApiError('Fut OpenRouter API Key te cilësimet dhe ruaj.')
+      onNeedSettings?.()
+      return
+    }
     setLoading('analyze')
     setApiError(null)
     setRawReply(null)
@@ -582,12 +459,15 @@ export default function ImageToUIView({
     const phaseTimer = window.setTimeout(() => setLoading('generate'), 500)
 
     try {
-      const auth = openRouterBearerFromStoredKey(settings)
+      const auth = optionalOpenRouterBearerHeaders(settings)
+      const visionModel = settings.useOpenRouter
+        ? OPENROUTER_CHAT_MODEL_SLUG
+        : 'openai/gpt-4o'
       const raw = await postImageToUi(
         {
-          model: OPENROUTER_VISION_MODEL_SLUG,
+          model: visionModel,
           prompt: VISION_PROMPT,
-          image: dataUrl,
+          imageDataUrl: dataUrl,
         },
         auth,
       )
@@ -595,7 +475,6 @@ export default function ImageToUIView({
       const parsed = parseAiOutput(raw)
       setHtml(parsed.html)
       setCss(parsed.css)
-      setJs(parsed.js)
       setExplanation(parsed.explanation)
       setRightTab('preview')
     } catch (e) {
@@ -605,16 +484,15 @@ export default function ImageToUIView({
       window.clearTimeout(phaseTimer)
       setLoading('idle')
     }
-  }, [dataUrl, isBusy, settings])
+  }, [dataUrl, isBusy, onNeedSettings, settings])
 
   const copyCode = useCallback(() => {
-    const block = `<!-- HTML -->\n${html}\n\n/* CSS */\n${css}${js.trim() ? `\n\n// JS\n${js}` : ''}`
+    const block = `<!-- HTML -->\n${html}\n\n/* CSS */\n${css}`
     void copyToClipboard(block, { emptyHint: 'Nothing to copy yet' })
-  }, [copyToClipboard, css, html, js])
+  }, [copyToClipboard, css, html])
 
   const previewBundle = useMemo(() => {
-    const hasDesign =
-      html.trim() !== '' || css.trim() !== '' || js.trim() !== ''
+    const hasDesign = html.trim() !== '' || css.trim() !== ''
     if (!hasDesign) {
       return {
         srcDoc: EMPTY_PREVIEW_DOC,
@@ -625,10 +503,10 @@ export default function ImageToUIView({
     }
     try {
       return {
-        srcDoc: buildSrcDoc(html, css, js),
+        srcDoc: buildSrcDoc(html, css),
         buildError: null as string | null,
         hasDesign: true,
-        contentKey: `${html.length}-${css.length}-${js.length}-${crypto.randomUUID()}`,
+        contentKey: `${html.length}-${css.length}-${crypto.randomUUID()}`,
       }
     } catch {
       return {
@@ -638,7 +516,7 @@ export default function ImageToUIView({
         contentKey: 'build-error',
       }
     }
-  }, [html, css, js])
+  }, [html, css])
 
   const loadingLabel =
     loading === 'analyze'
@@ -646,8 +524,6 @@ export default function ImageToUIView({
       : loading === 'generate'
         ? 'Generating design…'
         : null
-
-  const showProdApiBanner = productionNeedsApiBaseUrlBanner()
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#0A0F2C] text-white">
@@ -660,29 +536,6 @@ export default function ImageToUIView({
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <div className="mx-auto flex max-w-6xl flex-col gap-4">
-          {showProdApiBanner ? (
-            <div
-              role="status"
-              className="rounded-xl border border-amber-500/50 bg-amber-950/35 px-3 py-3 text-sm leading-relaxed text-amber-100/95"
-            >
-              <p className="font-semibold text-amber-100">Backend për Image to UI</p>
-              <p className="mt-1 text-xs text-amber-100/85">
-                Në këtë build nuk është vendosur{' '}
-                <code className="rounded bg-black/30 px-1 font-mono text-[11px]">
-                  VITE_API_BASE_URL
-                </code>
-                . Hosting statik nuk ekzekuton{' '}
-                <code className="rounded bg-black/30 px-1 font-mono text-[11px]">
-                  /api/ai
-                </code>{' '}
-                — duhet një server (p.sh. Node me proxy OpenRouter) dhe URL e tij në{' '}
-                <code className="rounded bg-black/30 px-1 font-mono text-[11px]">
-                  .env.production
-                </code>{' '}
-                para build.
-              </p>
-            </div>
-          ) : null}
           <div
             role="button"
             tabIndex={0}
@@ -816,7 +669,7 @@ export default function ImageToUIView({
                         className="inline-flex w-fit min-h-[44px] touch-manipulation items-center gap-1.5 rounded-lg border border-white/15 bg-[#0A0F2C] px-3 py-2 text-xs font-semibold text-white/90 hover:border-[#3B82F6]/40"
                       >
                         <Copy className="h-3.5 w-3.5" />
-                        Copy HTML + CSS + JS
+                        Copy HTML + CSS
                       </button>
                       {copyFeedback ? (
                         <p className="text-xs text-[#3B82F6]" role="status">
@@ -824,9 +677,9 @@ export default function ImageToUIView({
                         </p>
                       ) : null}
                     </div>
-                    <pre className="min-h-0 flex-1 overflow-auto rounded-xl border border-white/10 bg-[#0A0F2C] p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-white/85 select-text">
-                      {html || css || js
-                        ? `<!-- HTML -->\n${html}\n\n/* CSS */\n${css}${js.trim() ? `\n\n// JS\n${js}` : ''}`
+                    <pre className="min-h-0 flex-1 overflow-auto rounded-xl border border-white/10 bg-[#0A0F2C] p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-white/85">
+                      {html || css
+                        ? `<!-- HTML -->\n${html}\n\n/* CSS */\n${css}`
                         : rawReply ?? 'Generate design to see code here.'}
                     </pre>
                   </div>

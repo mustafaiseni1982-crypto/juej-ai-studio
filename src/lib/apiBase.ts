@@ -8,15 +8,3 @@ export function apiUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`
   return base ? `${base}${p}` : p
 }
-
-/** `true` kur kërkesat shkojnë te `/api/...` relative (Vite proxy lokal), jo te një host i jashtëm. */
-export function isUsingRelativeApiBase(): boolean {
-  return !import.meta.env.VITE_API_BASE_URL?.trim()
-}
-
-/**
- * Në prodhim, Firebase `rewrites ** → index.html` bën që POST /api/ai të kthejë HTML — pa backend të veçantë duhet VITE_API_BASE_URL.
- */
-export function productionNeedsApiBaseUrlBanner(): boolean {
-  return import.meta.env.PROD === true && isUsingRelativeApiBase()
-}

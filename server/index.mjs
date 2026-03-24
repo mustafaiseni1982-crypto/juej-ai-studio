@@ -5,7 +5,9 @@
  */
 import http from 'node:http'
 
-const PORT = process.env.PORT || 10000
+/** Render dhe platforma të ngjashme kërkojnë PORT nga mjedisi dhe dëgjim në 0.0.0.0 */
+const PORT = Number.parseInt(String(process.env.PORT || ''), 10) || 10000
+const HOST = '0.0.0.0'
 
 /** Hapësirat e panevojshme në .env bëjnë që çelësi të duket i vendosur por Bearer dërgohet bosh — OpenRouter: "Missing Authentication header". */
 function cleanEnvKey(name) {
@@ -64,13 +66,8 @@ function humanizeProviderErrorMessage(msg) {
 
 /** @returns {{ mode: 'none' } | { mode: 'error', message: string } | { mode: 'url', url: string }} */
 function getVisionImageUrlFromBody(body) {
-  // Kontrata e përbashkët: `image` = data URL e plotë (data:image/png;base64,...)
-  // ose `imageDataUrl` / `imageBase64` për përputhshmëri.
-  const dataUrl = [
-    typeof body.image === 'string' ? body.image.trim() : '',
-    typeof body.imageDataUrl === 'string' ? body.imageDataUrl.trim() : '',
-  ]
-    .find(Boolean) || ''
+  const dataUrl =
+    typeof body.imageDataUrl === 'string' ? body.imageDataUrl.trim() : ''
   const rawField =
     typeof body.imageBase64 === 'string' ? body.imageBase64.trim() : ''
 
@@ -217,14 +214,6 @@ async function openRouterChat(messages, modelSlug, apiKey, options = {}) {
   )
   const text = await upstream.text()
   if (!upstream.ok) {
-    if (options.logFullErrorResponse) {
-      console.error(
-        '[OpenRouter vision/multimodal] HTTP',
-        upstream.status,
-        '— full body:',
-        text,
-      )
-    }
     let msg = upstream.statusText
     try {
       const err = JSON.parse(text)
@@ -393,6 +382,15 @@ async function handleMultiAi(req, body, cors, res) {
       return
     }
     if (vision.mode === 'url') {
+      if (modelId !== 'openai/gpt-4o' && modelId !== 'openai/gpt-4o-mini') {
+        json(res, 400, cors, {
+          error: {
+            message:
+              'Imazhi mbështetet vetëm me modelet openai/gpt-4o ose openai/gpt-4o-mini.',
+          },
+        })
+        return
+      }
       messages = [
         {
           role: 'user',
@@ -400,7 +398,7 @@ async function handleMultiAi(req, body, cors, res) {
             { type: 'text', text: body.prompt },
             {
               type: 'image_url',
-              image_url: { url: vision.url },
+              image_url: { url: vision.url, detail: 'auto' },
             },
           ],
         },
@@ -425,36 +423,18 @@ async function handleMultiAi(req, body, cors, res) {
     return
   }
 
-  const hasVisionImage = messages.some(
-    (m) =>
-      Array.isArray(m.content) &&
-      m.content.some((p) => p && p.type === 'image_url'),
-  )
-
-  const bearerKey = extractBearerToken(req)
-  const openRouterForRequest = OPENROUTER_KEY || bearerKey
-
-  if (
-    hasVisionImage &&
-    !openRouterForRequest &&
-    modelId !== 'openai/gpt-4o' &&
-    modelId !== 'openai/gpt-4o-mini'
-  ) {
-    json(res, 400, cors, {
-      error: {
-        message:
-          'Imazhi kërkon OpenRouter (Authorization ose OPENROUTER_API_KEY në server) ose model openai/gpt-4o / openai/gpt-4o-mini me OpenAI API key.',
-      },
-    })
-    return
-  }
-
   try {
     let reply
+    const bearerKey = extractBearerToken(req)
+    const openRouterForRequest = OPENROUTER_KEY || bearerKey
+    const hasVisionImage = messages.some(
+      (m) =>
+        Array.isArray(m.content) &&
+        m.content.some((p) => p && p.type === 'image_url'),
+    )
     if (openRouterForRequest) {
       reply = await openRouterChat(messages, modelId, openRouterForRequest, {
         maxTokens: hasVisionImage ? 8192 : undefined,
-        logFullErrorResponse: hasVisionImage,
       })
       json(res, 200, cors, { reply, output: reply })
       return
@@ -490,9 +470,6 @@ async function handleMultiAi(req, body, cors, res) {
     }
     json(res, 200, cors, { reply, output: reply })
   } catch (e) {
-    if (hasVisionImage) {
-      console.error('[ /api/ai ] Vision request failed:', e)
-    }
     const msg = humanizeProviderErrorMessage(
       e instanceof Error ? e.message : String(e),
     )
@@ -510,6 +487,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   const path = req.url?.split('?')[0] ?? ''
+
+  if (req.method === 'GET' && (path === '/' || path === '')) {
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      ...cors,
+    })
+    res.end('Server is running')
+    return
+  }
 
   if (req.method === 'POST' && path === '/api/ai') {
     let body
@@ -610,6 +596,8 @@ const server = http.createServer(async (req, res) => {
   }
 })
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log('Server running on port ' + PORT)
+server.listen(PORT, HOST, () => {
+  console.log(
+    `JUEJ AI Code — listening on http://${HOST}:${PORT} (GET / health, /api/chat, /api/ai)`,
+  )
 })
