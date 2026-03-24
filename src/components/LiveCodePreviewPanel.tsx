@@ -42,14 +42,14 @@ function CodeTabBody({
         <button
           type="button"
           onClick={() => void onCopy()}
-          className="inline-flex min-h-[36px] touch-manipulation items-center gap-1.5 rounded-lg border border-white/15 bg-[#121836] px-2.5 py-1.5 text-[11px] font-semibold text-white/90 hover:border-[#3B82F6]/50"
+          className="inline-flex min-h-[36px] touch-manipulation items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-semibold text-white/90 transition hover:-translate-y-px hover:border-[#60a5fa]/45 hover:shadow-[0_0_16px_rgba(59,130,246,0.2)]"
         >
           <Copy className="h-3 w-3" aria-hidden />
           Copy
         </button>
       </div>
       {copyFeedback ? (
-        <p className="text-xs font-medium text-[#3B82F6]" role="status">
+        <p className="text-xs font-medium text-[#60a5fa]" role="status">
           {copyFeedback}
         </p>
       ) : null}
@@ -90,8 +90,8 @@ export const LiveCodePreviewPanel = memo(function LiveCodePreviewPanel({
   if (!hasLivePreviewContent(parts)) return null
 
   return (
-    <div className="mt-4 w-full overflow-hidden rounded-2xl border border-[#E5E7EB] bg-[#0A0F2C] shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
-      <div className="flex flex-wrap gap-1 border-b border-white/10 bg-[#121836] px-2 py-2">
+    <div className="glass-panel mt-4 w-full !rounded-[20px] !shadow-[0_10px_40px_rgba(0,0,0,0.55)]">
+      <div className="flex flex-wrap gap-1 border-b border-white/[0.08] px-2 py-2.5">
         {TAB_LABELS.map(({ id, label }) => (
           <button
             key={id}
@@ -99,10 +99,10 @@ export const LiveCodePreviewPanel = memo(function LiveCodePreviewPanel({
             role="tab"
             aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={`min-h-[40px] touch-manipulation rounded-lg px-3 text-xs font-semibold transition ${
+            className={`min-h-[40px] touch-manipulation rounded-xl px-3.5 text-xs font-semibold transition duration-200 ease-out ${
               tab === id
-                ? 'bg-[#3B82F6] text-white shadow-sm'
-                : 'text-white/55 hover:bg-white/5 hover:text-white/90'
+                ? 'premium-tab-active scale-[1.02] text-white'
+                : 'text-white/50 hover:translate-y-[-1px] hover:bg-white/[0.06] hover:text-white/90'
             }`}
           >
             {label}
@@ -112,9 +112,9 @@ export const LiveCodePreviewPanel = memo(function LiveCodePreviewPanel({
 
       <div className="p-3 sm:p-4">
         {tab === 'preview' && (
-          <div className="overflow-hidden rounded-xl border border-white/10 bg-[#1a1f35] shadow-inner">
-            <div className="flex items-center gap-2 border-b border-white/10 bg-[#252b42] px-3 py-2">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-white/40">
+          <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0d1117]/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <div className="flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.03] px-3 py-2.5 backdrop-blur-sm">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                 Live preview
               </span>
             </div>

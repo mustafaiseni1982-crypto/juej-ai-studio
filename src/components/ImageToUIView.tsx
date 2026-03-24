@@ -10,13 +10,10 @@ import {
 } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { apiUrl } from '../lib/apiBase'
+import { apiUrl, humanizeFetchNetworkError } from '../lib/apiBase'
+import { parseJsonFromResponse } from '../lib/parseApiJson'
 import { useCopyFeedback } from '../hooks/useCopyFeedback'
 import { OPENROUTER_CHAT_MODEL_SLUG } from '../lib/openRouterConstants'
-import { logOpenRouterRequest } from '../lib/openRouterDebug'
-import { optionalOpenRouterBearerHeaders } from '../lib/openRouterAuthHeaders'
-import { getEffectiveOpenRouterKey } from '../lib/storage'
-import type { AppSettings } from '../types'
 
 const ACCEPT = 'image/png,image/jpeg,image/jpg'
 const MAX_BYTES = 5 * 1024 * 1024
@@ -274,58 +271,37 @@ function humanizeImageToUiError(message: string): string {
     return 'The image could not be processed. Try a smaller PNG or JPG, or re-export the screenshot.'
   }
   if (/missing authentication header|401/i.test(m)) {
-    return 'Mungon çelësi OpenRouter. Aktivizo OpenRouter te Cilësimet dhe fut API key, ose vendos OPENROUTER_API_KEY në serverin e proxy-t.'
+    return 'Mungon çelësi në backend. Vendos OPENROUTER_API_KEY në Railway.'
   }
   return m
 }
 
-async function postImageToUi(
-  payload: {
-    model: string
-    prompt: string
-    imageDataUrl: string
-  },
-  authHeaders: Record<string, string>,
-): Promise<string> {
-  const bearer = authHeaders.Authorization?.replace(/^Bearer\s+/i, '')?.trim()
-  if (bearer) {
-    logOpenRouterRequest('imageToUi/api/ai', {
-      apiKey: bearer,
-      endpoint: apiUrl('/api/ai'),
-      model: payload.model,
-    })
-  }
-
+async function postImageToUi(payload: {
+  model: string
+  prompt: string
+  imageDataUrl: string
+}): Promise<string> {
   let res: Response
   try {
     res = await fetch(apiUrl('/api/ai'), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
-  } catch {
+  } catch (e) {
+    throw humanizeFetchNetworkError(e)
+  }
+  let data: { output?: string; reply?: string; error?: { message?: string } }
+  try {
+    data = await parseJsonFromResponse(res)
+  } catch (e) {
     throw new Error(
-      'Could not reach the API server. Check your connection and that the dev server proxy is running.',
+      e instanceof Error ? e.message : 'Invalid response from API. Try again.',
     )
   }
   if (!res.ok) {
-    let msg = res.statusText || 'Request failed'
-    try {
-      const j = (await res.json()) as { error?: { message?: string } }
-      if (j.error?.message) msg = j.error.message
-    } catch {
-      /* ignore */
-    }
+    const msg = data.error?.message ?? res.statusText ?? 'Request failed'
     throw new Error(humanizeImageToUiError(msg))
-  }
-  let data: { output?: string; reply?: string }
-  try {
-    data = (await res.json()) as { output?: string; reply?: string }
-  } catch {
-    throw new Error('Invalid response from API. Try again.')
   }
   const out = data.output ?? data.reply
   if (typeof out !== 'string' || !out.trim()) {
@@ -394,14 +370,10 @@ async function prepareImageForVision(file: File): Promise<string> {
 }
 
 export interface ImageToUIViewProps {
-  settings: AppSettings
   onNeedSettings?: () => void
 }
 
-export default function ImageToUIView({
-  settings,
-  onNeedSettings,
-}: ImageToUIViewProps) {
+export default function ImageToUIView({ onNeedSettings }: ImageToUIViewProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dataUrl, setDataUrl] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -430,6 +402,7 @@ export default function ImageToUIView({
       setExplanation('')
       setApiError(null)
     } catch (e) {
+      console.error(e)
       setUploadError(e instanceof Error ? e.message : 'Invalid file.')
       setDataUrl(null)
     }
@@ -447,11 +420,6 @@ export default function ImageToUIView({
 
   const generate = useCallback(async () => {
     if (!dataUrl || isBusy) return
-    if (settings.useOpenRouter && !getEffectiveOpenRouterKey(settings)) {
-      setApiError('Fut OpenRouter API Key te cilësimet dhe ruaj.')
-      onNeedSettings?.()
-      return
-    }
     setLoading('analyze')
     setApiError(null)
     setRawReply(null)
@@ -459,18 +427,11 @@ export default function ImageToUIView({
     const phaseTimer = window.setTimeout(() => setLoading('generate'), 500)
 
     try {
-      const auth = optionalOpenRouterBearerHeaders(settings)
-      const visionModel = settings.useOpenRouter
-        ? OPENROUTER_CHAT_MODEL_SLUG
-        : 'openai/gpt-4o'
-      const raw = await postImageToUi(
-        {
-          model: visionModel,
-          prompt: VISION_PROMPT,
-          imageDataUrl: dataUrl,
-        },
-        auth,
-      )
+      const raw = await postImageToUi({
+        model: OPENROUTER_CHAT_MODEL_SLUG,
+        prompt: VISION_PROMPT,
+        imageDataUrl: dataUrl,
+      })
       setRawReply(raw)
       const parsed = parseAiOutput(raw)
       setHtml(parsed.html)
@@ -478,13 +439,14 @@ export default function ImageToUIView({
       setExplanation(parsed.explanation)
       setRightTab('preview')
     } catch (e) {
+      console.error(e)
       const rawMsg = e instanceof Error ? e.message : 'Request failed.'
       setApiError(humanizeImageToUiError(rawMsg))
     } finally {
       window.clearTimeout(phaseTimer)
       setLoading('idle')
     }
-  }, [dataUrl, isBusy, onNeedSettings, settings])
+  }, [dataUrl, isBusy])
 
   const copyCode = useCallback(() => {
     const block = `<!-- HTML -->\n${html}\n\n/* CSS */\n${css}`
@@ -526,11 +488,11 @@ export default function ImageToUIView({
         : null
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#0A0F2C] text-white">
-      <header className="shrink-0 border-b border-white/10 px-4 py-4">
-        <h1 className="text-lg font-semibold tracking-tight">Image to UI</h1>
-        <p className="mt-1 text-xs text-white/55">
-          Upload a screenshot → GPT-4o vision → HTML, CSS, preview, and explanation.
+    <div className="flex h-full min-h-0 flex-col bg-transparent text-white">
+      <header className="premium-top-bar shrink-0 px-5 py-5 sm:px-8">
+        <h1 className="text-xl font-bold tracking-tight text-white">Image to UI</h1>
+        <p className="mt-1.5 text-sm text-[#94a3b8]">
+          Upload a screenshot → vision model → HTML, CSS, preview, and explanation.
         </p>
       </header>
 
@@ -551,9 +513,9 @@ export default function ImageToUIView({
             }}
             onDrop={onDrop}
             onClick={() => inputRef.current?.click()}
-            className="flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/20 bg-[#121836]/90 px-4 py-8 transition hover:border-[#3B82F6]/50 hover:bg-[#121836]"
+            className="glass-panel-subtle flex min-h-[140px] cursor-pointer flex-col items-center justify-center !rounded-[20px] border-2 border-dashed border-white/[0.15] px-4 py-8 transition duration-200 hover:-translate-y-0.5 hover:border-[#60a5fa]/45 hover:shadow-[0_0_32px_rgba(59,130,246,0.12)]"
           >
-            <ImageUp className="mb-2 h-10 w-10 text-[#3B82F6]" aria-hidden />
+            <ImageUp className="mb-2 h-10 w-10 text-[#60a5fa]" aria-hidden />
             <p className="text-center text-sm text-white/80">
               Drag &amp; drop image or click to upload
             </p>
@@ -584,7 +546,7 @@ export default function ImageToUIView({
               type="button"
               onClick={() => void generate()}
               disabled={!dataUrl || isBusy}
-              className="inline-flex min-h-[48px] touch-manipulation items-center justify-center gap-2 rounded-xl bg-[#3B82F6] px-6 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(59,130,246,0.35)] transition hover:bg-[#2563EB] disabled:cursor-not-allowed disabled:opacity-40"
+              className="btn-premium-primary !px-6"
             >
               {isBusy ? (
                 <Loader2 className="h-5 w-5 animate-spin" aria-hidden />

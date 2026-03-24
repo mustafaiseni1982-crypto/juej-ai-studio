@@ -1,16 +1,13 @@
 import { Copy, Loader2, Sparkles } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
-import { apiUrl } from '../lib/apiBase'
-import { OPENROUTER_CHAT_MODEL_SLUG } from '../lib/openRouterConstants'
-import { logOpenRouterRequest } from '../lib/openRouterDebug'
-import { optionalOpenRouterBearerHeaders } from '../lib/openRouterAuthHeaders'
+import { apiUrl, humanizeFetchNetworkError } from '../lib/apiBase'
+import { parseJsonFromResponse } from '../lib/parseApiJson'
 import { useCopyFeedback } from '../hooks/useCopyFeedback'
 import {
   extractCodeBlocks,
   hasLivePreviewContent,
 } from '../lib/extractLiveCodeBlocks'
-import { getEffectiveOpenRouterKey } from '../lib/storage'
-import type { AppSettings, CompareModelId } from '../types'
+import type { CompareModelId } from '../types'
 import { LiveCodePreviewPanel } from './LiveCodePreviewPanel'
 
 const MODEL_IDS: CompareModelId[] = [
@@ -35,36 +32,26 @@ type LoadingState = 'idle' | 'compare' | 'merge'
 async function postApiAi(
   model: CompareModelId,
   prompt: string,
-  authHeaders: Record<string, string>,
 ): Promise<string> {
-  const bearer = authHeaders.Authorization?.replace(/^Bearer\s+/i, '')?.trim()
-  if (bearer) {
-    logOpenRouterRequest('compare/api/ai', {
-      apiKey: bearer,
-      endpoint: apiUrl('/api/ai'),
-      model,
+  let res: Response
+  try {
+    res = await fetch(apiUrl('/api/ai'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, prompt }),
     })
+  } catch (e) {
+    throw humanizeFetchNetworkError(e)
   }
-
-  const res = await fetch(apiUrl('/api/ai'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders,
-    },
-    body: JSON.stringify({ model, prompt }),
-  })
+  const data = await parseJsonFromResponse<{
+    output?: string
+    reply?: string
+    error?: { message?: string }
+  }>(res)
   if (!res.ok) {
-    let msg = res.statusText
-    try {
-      const j = (await res.json()) as { error?: { message?: string } }
-      if (j.error?.message) msg = j.error.message
-    } catch {
-      /* ignore */
-    }
+    const msg = data.error?.message ?? res.statusText
     throw new Error(msg)
   }
-  const data = (await res.json()) as { output?: string; reply?: string }
   const out = data.output ?? data.reply
   if (typeof out !== 'string' || !out.trim()) {
     throw new Error('Empty response from API.')
@@ -95,14 +82,10 @@ ${resB}
 }
 
 export interface CompareAIViewProps {
-  settings: AppSettings
   onNeedSettings?: () => void
 }
 
-export default function CompareAIView({
-  settings,
-  onNeedSettings,
-}: CompareAIViewProps) {
+export default function CompareAIView({ onNeedSettings }: CompareAIViewProps) {
   const [prompt, setPrompt] = useState('')
   const [modelA, setModelA] = useState<CompareModelId>('openai/gpt-4o')
   const [modelB, setModelB] = useState<CompareModelId>(
@@ -119,19 +102,9 @@ export default function CompareAIView({
   const isBusy = loading !== 'idle'
   const canMerge = resA !== null && resB !== null && !isBusy
 
-  const authHeaders = useMemo(
-    () => optionalOpenRouterBearerHeaders(settings),
-    [settings],
-  )
-
   const runCompare = useCallback(async () => {
     const text = prompt.trim()
     if (!text || isBusy) return
-    if (settings.useOpenRouter && !getEffectiveOpenRouterKey(settings)) {
-      setCompareError('Fut OpenRouter API Key te cilësimet dhe ruaj.')
-      onNeedSettings?.()
-      return
-    }
     setLoading('compare')
     setCompareError(null)
     setMergeError(null)
@@ -139,58 +112,38 @@ export default function CompareAIView({
     setResA(null)
     setResB(null)
     try {
-      const mA = settings.useOpenRouter ? OPENROUTER_CHAT_MODEL_SLUG : modelA
-      const mB = settings.useOpenRouter ? OPENROUTER_CHAT_MODEL_SLUG : modelB
       const [a, b] = await Promise.all([
-        postApiAi(mA, text, authHeaders),
-        postApiAi(mB, text, authHeaders),
+        postApiAi(modelA, text),
+        postApiAi(modelB, text),
       ])
       setResA(a)
       setResB(b)
       setActiveTab('a')
     } catch (e) {
+      console.error(e)
       setCompareError(e instanceof Error ? e.message : 'Compare failed.')
       setResA(null)
       setResB(null)
     } finally {
       setLoading('idle')
     }
-  }, [
-    authHeaders,
-    isBusy,
-    modelA,
-    modelB,
-    onNeedSettings,
-    prompt,
-    settings,
-  ])
+  }, [isBusy, modelA, modelB, prompt])
 
   const runMerge = useCallback(async () => {
     if (!resA || !resB || isBusy) return
-    if (settings.useOpenRouter && !getEffectiveOpenRouterKey(settings)) {
-      setMergeError('Fut OpenRouter API Key te cilësimet dhe ruaj.')
-      onNeedSettings?.()
-      return
-    }
     setLoading('merge')
     setMergeError(null)
     try {
-      const mergeModel = settings.useOpenRouter
-        ? OPENROUTER_CHAT_MODEL_SLUG
-        : MERGE_MODEL
-      const out = await postApiAi(
-        mergeModel,
-        buildMergePrompt(resA, resB),
-        authHeaders,
-      )
+      const out = await postApiAi(MERGE_MODEL, buildMergePrompt(resA, resB))
       setMerged(out)
       setActiveTab('merged')
     } catch (e) {
+      console.error(e)
       setMergeError(e instanceof Error ? e.message : 'Merge failed.')
     } finally {
       setLoading('idle')
     }
-  }, [authHeaders, isBusy, onNeedSettings, resA, resB, settings])
+  }, [isBusy, resA, resB])
 
   const displayText =
     activeTab === 'a'
@@ -207,14 +160,14 @@ export default function CompareAIView({
   const { copy: copyResult, feedback: copyFeedback } = useCopyFeedback()
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#0A0F2C] text-white">
-      <header className="shrink-0 border-b border-white/10 px-4 py-4">
-        <h1 className="text-lg font-semibold tracking-tight text-white">
+    <div className="flex h-full min-h-0 flex-col bg-transparent text-white">
+      <header className="premium-top-bar shrink-0 px-5 py-5 sm:px-8">
+        <h1 className="text-xl font-bold tracking-tight text-white">
           Compare AI
         </h1>
-        <p className="mt-1 text-xs text-white/55">
-          Same prompt → two models → merge into one answer via{' '}
-          <span className="text-[#3B82F6]">POST /api/ai</span>
+        <p className="mt-1.5 text-sm text-[#94a3b8]">
+          Same prompt → two models → merge via{' '}
+          <span className="font-medium text-[#60a5fa]">POST /api/ai</span>
         </p>
       </header>
 
@@ -236,7 +189,7 @@ export default function CompareAIView({
               placeholder="Enter your prompt…"
               autoComplete="off"
               spellCheck
-              className="relative z-[1] mt-2 w-full resize-none rounded-xl border border-white/10 bg-[#121836] px-4 py-3 text-sm text-white/90 shadow-inner placeholder:text-white/35 focus:border-[#3B82F6] focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/25 disabled:opacity-50"
+              className="premium-input relative z-[1] mt-2 min-h-[100px] w-full resize-none shadow-inner placeholder:text-slate-500 disabled:opacity-50"
             />
           </div>
 
@@ -253,10 +206,10 @@ export default function CompareAIView({
                 value={modelA}
                 disabled={isBusy}
                 onChange={(e) => setModelA(e.target.value as CompareModelId)}
-                className="mt-2 w-full min-h-[48px] rounded-xl border border-white/10 bg-[#121836] px-3 text-sm text-white focus:border-[#3B82F6] focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/25 disabled:opacity-50"
+                className="premium-input premium-select mt-2 min-h-[48px] w-full cursor-pointer text-sm disabled:opacity-50"
               >
                 {MODEL_IDS.map((id) => (
-                  <option key={id} value={id} className="bg-[#0A0F2C]">
+                  <option key={id} value={id} className="bg-[#0b0f1a]">
                     {MODEL_LABELS[id]}
                   </option>
                 ))}
@@ -274,10 +227,10 @@ export default function CompareAIView({
                 value={modelB}
                 disabled={isBusy}
                 onChange={(e) => setModelB(e.target.value as CompareModelId)}
-                className="mt-2 w-full min-h-[48px] rounded-xl border border-white/10 bg-[#121836] px-3 text-sm text-white focus:border-[#3B82F6] focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/25 disabled:opacity-50"
+                className="premium-input premium-select mt-2 min-h-[48px] w-full cursor-pointer text-sm disabled:opacity-50"
               >
                 {MODEL_IDS.map((id) => (
-                  <option key={id} value={id} className="bg-[#0A0F2C]">
+                  <option key={id} value={id} className="bg-[#0b0f1a]">
                     {MODEL_LABELS[id]}
                   </option>
                 ))}
@@ -290,7 +243,7 @@ export default function CompareAIView({
               type="button"
               onClick={() => void runCompare()}
               disabled={isBusy || !prompt.trim()}
-              className="inline-flex min-h-[48px] flex-1 touch-manipulation items-center justify-center gap-2 rounded-xl bg-[#3B82F6] px-5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(59,130,246,0.35)] transition hover:bg-[#2563EB] disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
+              className="btn-premium-primary flex-1 !min-h-[48px] sm:flex-none"
             >
               {loading === 'compare' ? (
                 <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
@@ -301,7 +254,7 @@ export default function CompareAIView({
               type="button"
               onClick={() => void runMerge()}
               disabled={!canMerge}
-              className="inline-flex min-h-[48px] flex-1 touch-manipulation items-center justify-center gap-2 rounded-xl border border-[#3B82F6]/50 bg-[#3B82F6]/10 px-5 text-sm font-semibold text-[#93C5FD] transition hover:bg-[#3B82F6]/20 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
+              className="btn-premium-ghost flex-1 !min-h-[48px] !border-[#3b82f6]/40 !text-[#93c5fd] hover:!shadow-[0_0_24px_rgba(59,130,246,0.25)] sm:flex-none"
             >
               {loading === 'merge' ? (
                 <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
@@ -328,10 +281,10 @@ export default function CompareAIView({
             <p className="text-center text-sm text-[#3B82F6]">Merging…</p>
           )}
 
-          <div className="rounded-xl border border-white/10 bg-[#121836]/80">
+          <div className="glass-panel !rounded-[20px]">
             <div
               role="tablist"
-              className="flex border-b border-white/10"
+              className="flex border-b border-white/[0.08]"
               aria-label="Compare results"
             >
               {(
@@ -347,10 +300,10 @@ export default function CompareAIView({
                   role="tab"
                   aria-selected={activeTab === id}
                   onClick={() => setActiveTab(id)}
-                  className={`min-h-[44px] flex-1 px-3 text-center text-sm font-medium transition ${
+                  className={`min-h-[48px] flex-1 px-3 text-center text-sm font-semibold transition duration-200 ${
                     activeTab === id
-                      ? 'border-b-2 border-[#3B82F6] text-[#3B82F6]'
-                      : 'text-white/55 hover:text-white/80'
+                      ? 'border-b-2 border-[#60a5fa] text-[#60a5fa] shadow-[0_0_20px_rgba(59,130,246,0.15)]'
+                      : 'text-[#94a3b8] hover:bg-white/[0.04] hover:text-white'
                   }`}
                 >
                   {label}
@@ -379,7 +332,7 @@ export default function CompareAIView({
                     <button
                       type="button"
                       onClick={() => void copyResult(displayText)}
-                      className="inline-flex min-h-[40px] touch-manipulation items-center gap-1.5 rounded-lg border border-white/15 bg-[#121836] px-3 py-2 text-xs font-semibold text-white/90 hover:border-[#3B82F6]/50"
+                      className="btn-premium-ghost !min-h-[40px] !text-xs"
                     >
                       <Copy className="h-3.5 w-3.5" aria-hidden />
                       Copy result
@@ -390,7 +343,7 @@ export default function CompareAIView({
                       </span>
                     ) : null}
                   </div>
-                  <div className="rounded-lg bg-[#0A0F2C] p-4 font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-words text-white/90">
+                  <div className="rounded-2xl border border-white/[0.06] bg-black/25 p-4 font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-words text-slate-200 backdrop-blur-sm">
                     {displayText}
                   </div>
                   {compareLiveParts &&

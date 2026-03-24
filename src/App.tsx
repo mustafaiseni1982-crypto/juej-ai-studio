@@ -1,4 +1,4 @@
-import { Menu } from 'lucide-react'
+import { Menu, Sparkles } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChatPanel } from './components/ChatPanel'
 import CompareAIView from './components/CompareAIView'
@@ -16,13 +16,7 @@ import {
   explainUserPayload,
   MENTOR_SYSTEM,
 } from './lib/prompts'
-import {
-  getEffectiveOpenRouterKey,
-  loadHistory,
-  loadSettings,
-  saveHistory,
-  saveSettings,
-} from './lib/storage'
+import { loadHistory, loadSettings, saveHistory, saveSettings } from './lib/storage'
 import type {
   AppSettings,
   ChatMessage,
@@ -113,22 +107,6 @@ export default function App() {
         'Të lutem analizo gabimet, korrigjo kodin dhe shpjego ndryshimet.'
     }
     if (!trimmed || loading) return
-    if (!openAiProxyEnabled) {
-      if (settings.useOpenRouter) {
-        if (!getEffectiveOpenRouterKey(settings)) {
-          setError('Fut OpenRouter API Key te cilësimet dhe ruaj.')
-          setNav('settings')
-          return
-        }
-      } else if (!settings.apiKey.trim()) {
-        setError(
-          'Shto OpenAI API Key, aktivizo OpenRouter, ose aktivizo proxy të serverit.',
-        )
-        setNav('settings')
-        return
-      }
-    }
-
     let userContent = trimmed
     if (nav === 'explain' && code.trim()) {
       userContent = `${trimmed}\n\n${explainUserPayload(code, language)}`
@@ -152,14 +130,7 @@ export default function App() {
     try {
       const reply = await chatCompletion(
         [...apiMessages, { role: 'user' as const, content: userContent }],
-        settings.apiKey,
         settings.model,
-        {
-          openRouterKey:
-            settings.useOpenRouter && getEffectiveOpenRouterKey(settings)
-              ? getEffectiveOpenRouterKey(settings)
-              : undefined,
-        },
       )
       const assistantMsg: ChatMessage = {
         id: uid(),
@@ -172,6 +143,7 @@ export default function App() {
       const newId = persistConversation(finalMsgs, conversationId)
       setConversationId(newId)
     } catch (e) {
+      console.error(e)
       setError(e instanceof Error ? e.message : 'Gabim i panjohur.')
     } finally {
       setLoading(false)
@@ -186,9 +158,8 @@ export default function App() {
     messages,
     nav,
     persistConversation,
-    settings.apiKey,
+    settings,
     settings.model,
-    settings.useOpenRouter,
   ])
 
   const handleExplainFollowUp = useCallback(
@@ -250,30 +221,14 @@ export default function App() {
         onDelete={handleDeleteHistory}
       />
     ) : nav === 'design' ? (
-      <DesignGeneratorView
-        useOpenRouter={settings.useOpenRouter}
-        apiKey={settings.apiKey}
-        model={settings.model}
-        openRouterKey={
-          settings.useOpenRouter
-            ? getEffectiveOpenRouterKey(settings) || undefined
-            : undefined
-        }
-        onNeedSettings={() => setNav('settings')}
-      />
+      <DesignGeneratorView model={settings.model} />
     ) : nav === 'imageToUi' ? (
-      <ImageToUIView
-        settings={settings}
-        onNeedSettings={() => setNav('settings')}
-      />
+      <ImageToUIView onNeedSettings={() => setNav('settings')} />
     ) : nav === 'compare' ? (
-      <CompareAIView
-        settings={settings}
-        onNeedSettings={() => setNav('settings')}
-      />
+      <CompareAIView onNeedSettings={() => setNav('settings')} />
     ) : (
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="flex min-h-[45vh] min-w-0 flex-1 flex-col border-b border-[#E5E7EB] lg:min-h-0 lg:max-w-[min(100%,560px)] lg:border-b-0 lg:border-r">
+        <div className="flex min-h-[45vh] min-w-0 flex-1 flex-col border-b border-white/[0.08] lg:min-h-0 lg:max-w-[min(100%,560px)] lg:border-b-0 lg:border-r">
           <ChatPanel
             messages={messages}
             navMode={nav}
@@ -288,7 +243,7 @@ export default function App() {
             error={error}
           />
         </div>
-        <div className="flex min-h-[50vh] min-w-0 flex-[1.15] flex-col bg-white lg:min-h-0">
+        <div className="flex min-h-[50vh] min-w-0 flex-[1.15] flex-col lg:min-h-0">
           <div className="min-h-0 flex-1">
             <CodeEditorPanel
               language={language}
@@ -309,7 +264,8 @@ export default function App() {
     )
 
   return (
-    <div className="flex h-full min-h-0 bg-[#FFFFFF] text-[#1F2937]">
+    <div className="relative z-[1] flex h-full min-h-0 overflow-hidden text-slate-100">
+      <div className="premium-bg-effects" aria-hidden />
       <Sidebar
         active={nav}
         onNavigate={setNav}
@@ -317,25 +273,51 @@ export default function App() {
         onCloseMobile={() => setMobileMenu(false)}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-3 border-b border-[#E5E7EB] bg-white px-3 py-3 lg:hidden">
-          <button
-            type="button"
-            onClick={() => setMobileMenu(true)}
-            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] text-[#0A0F2C] transition hover:scale-[1.02]"
-            aria-label="Hap menunë"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          <div className="leading-tight">
-            <p className="text-xs font-medium uppercase tracking-wider text-[#3B82F6]">
-              JUEJ AI
-            </p>
-            <p className="text-sm font-semibold text-[#0A0F2C]">Code</p>
+      <div className="relative z-[2] flex min-w-0 flex-1 flex-col">
+        <header className="premium-top-bar sticky top-0 z-30 hidden items-center justify-between gap-4 px-6 py-3 lg:flex">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#3b82f6] to-[#6366f1] shadow-[0_0_24px_rgba(59,130,246,0.35)]">
+              <Sparkles className="h-4 w-4 text-white" aria-hidden />
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                JUEJ AI Studio
+              </p>
+              <p className="text-sm font-semibold tracking-tight text-white">
+                Premium workspace
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-xs text-slate-400">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]"
+              aria-hidden
+            />
+            Backend connected
           </div>
         </header>
 
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <header className="premium-top-bar flex items-center gap-3 px-3 py-3 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileMenu(true)}
+            className="btn-premium-ghost inline-flex !min-h-[44px] !min-w-[44px] !p-0"
+            aria-label="Hap menunë"
+          >
+            <Menu className="h-5 w-5 text-slate-200" />
+          </button>
+          <div className="leading-tight">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#3b82f6]">
+              JUEJ AI Studio
+            </p>
+            <p className="text-sm font-semibold text-white">Code</p>
+          </div>
+        </header>
+
+        <main
+          key={nav}
+          className="page-fade-in flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
           {mainWorkspace}
         </main>
       </div>

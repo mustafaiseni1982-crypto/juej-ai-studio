@@ -40,36 +40,42 @@ export function Sidebar({
   return (
     <>
       <div
-        className={`fixed inset-0 z-40 bg-[#0A0F2C]/40 backdrop-blur-sm transition-opacity lg:hidden ${
+        className={`fixed inset-0 z-40 bg-[#0b0f1a]/70 backdrop-blur-md transition-opacity duration-300 lg:hidden ${
           mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         aria-hidden={!mobileOpen}
         onClick={onCloseMobile}
       />
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-full w-[260px] flex-col border-r border-white/10 bg-[#0A0F2C] text-white transition-transform duration-300 ease-out lg:static lg:translate-x-0 ${
+        className={`fixed left-0 top-0 z-50 flex h-full w-[272px] flex-col border-r border-white/[0.08] transition-transform duration-300 ease-out lg:static lg:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
+        style={{
+          background:
+            'linear-gradient(165deg, rgba(18, 24, 48, 0.95) 0%, rgba(11, 15, 26, 0.98) 45%, #0b0f1a 100%)',
+        }}
       >
-        <div className="flex items-center justify-between gap-2 px-5 py-6">
+        <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-5 py-6">
           <div className="flex flex-col leading-tight">
-            <span className="text-xs font-medium uppercase tracking-[0.2em] text-white/50">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
               JUEJ AI
             </span>
-            <span className="text-lg font-semibold tracking-tight">Code</span>
+            <span className="mt-0.5 text-lg font-semibold tracking-tight text-white">
+              Studio
+            </span>
           </div>
           <button
             type="button"
             onClick={onCloseMobile}
-            className="rounded-lg p-2 text-white/70 transition hover:scale-[1.02] hover:bg-white/10 hover:text-white lg:hidden"
+            className="rounded-xl p-2 text-slate-400 transition duration-200 hover:-translate-y-px hover:bg-white/[0.06] hover:text-white lg:hidden"
             aria-label="Mbyll menunë"
           >
             <PanelLeftClose className="h-5 w-5" />
           </button>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 px-3 pb-6">
-          {items.map(({ id, label, icon: Icon }) => {
+        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4">
+          {items.slice(0, 4).map(({ id, label, icon: Icon }) => {
             const isActive = active === id
             return (
               <button
@@ -79,20 +85,95 @@ export function Sidebar({
                   onNavigate(id)
                   onCloseMobile()
                 }}
-                className={`flex min-h-[44px] items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition duration-200 hover:scale-[1.02] ${
+                className={`group relative flex min-h-[46px] items-center gap-3 rounded-2xl px-3.5 py-2.5 text-left text-[13px] font-medium transition duration-200 ease-out ${
                   isActive
-                    ? 'bg-[#3B82F6] text-white shadow-[0_4px_14px_rgba(59,130,246,0.25)]'
-                    : 'text-white/75 hover:bg-white/5 hover:text-white'
+                    ? 'scale-[1.03] bg-gradient-to-r from-[#3b82f6]/25 to-[#6366f1]/15 text-white shadow-[0_0_28px_rgba(59,130,246,0.28),inset_0_0_0_1px_rgba(59,130,246,0.25)]'
+                    : 'text-slate-400 hover:translate-x-0.5 hover:bg-white/[0.05] hover:text-slate-100'
                 }`}
               >
-                <Icon className="h-5 w-5 shrink-0 opacity-90" aria-hidden />
+                <Icon
+                  className={`h-[18px] w-[18px] shrink-0 transition duration-200 ${
+                    isActive
+                      ? 'text-[#60a5fa] drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                      : 'text-slate-500 group-hover:text-slate-300'
+                  }`}
+                  aria-hidden
+                />
+                {label}
+              </button>
+            )
+          })}
+
+          <div
+            className="my-3 h-px bg-gradient-to-r from-transparent via-white/[0.1] to-transparent"
+            role="separator"
+          />
+
+          {items.slice(4, 7).map(({ id, label, icon: Icon }) => {
+            const isActive = active === id
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  onNavigate(id)
+                  onCloseMobile()
+                }}
+                className={`group relative flex min-h-[46px] items-center gap-3 rounded-2xl px-3.5 py-2.5 text-left text-[13px] font-medium transition duration-200 ease-out ${
+                  isActive
+                    ? 'scale-[1.03] bg-gradient-to-r from-[#3b82f6]/25 to-[#6366f1]/15 text-white shadow-[0_0_28px_rgba(59,130,246,0.28),inset_0_0_0_1px_rgba(59,130,246,0.25)]'
+                    : 'text-slate-400 hover:translate-x-0.5 hover:bg-white/[0.05] hover:text-slate-100'
+                }`}
+              >
+                <Icon
+                  className={`h-[18px] w-[18px] shrink-0 transition duration-200 ${
+                    isActive
+                      ? 'text-[#60a5fa] drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                      : 'text-slate-500 group-hover:text-slate-300'
+                  }`}
+                  aria-hidden
+                />
+                {label}
+              </button>
+            )
+          })}
+
+          <div
+            className="my-3 h-px bg-gradient-to-r from-transparent via-white/[0.1] to-transparent"
+            role="separator"
+          />
+
+          {items.slice(7).map(({ id, label, icon: Icon }) => {
+            const isActive = active === id
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  onNavigate(id)
+                  onCloseMobile()
+                }}
+                className={`group relative flex min-h-[46px] items-center gap-3 rounded-2xl px-3.5 py-2.5 text-left text-[13px] font-medium transition duration-200 ease-out ${
+                  isActive
+                    ? 'scale-[1.03] bg-gradient-to-r from-[#3b82f6]/25 to-[#6366f1]/15 text-white shadow-[0_0_28px_rgba(59,130,246,0.28),inset_0_0_0_1px_rgba(59,130,246,0.25)]'
+                    : 'text-slate-400 hover:translate-x-0.5 hover:bg-white/[0.05] hover:text-slate-100'
+                }`}
+              >
+                <Icon
+                  className={`h-[18px] w-[18px] shrink-0 transition duration-200 ${
+                    isActive
+                      ? 'text-[#60a5fa] drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                      : 'text-slate-500 group-hover:text-slate-300'
+                  }`}
+                  aria-hidden
+                />
                 {label}
               </button>
             )
           })}
         </nav>
 
-        <div className="border-t border-white/10 px-5 py-4 text-xs text-white/40">
+        <div className="border-t border-white/[0.06] px-5 py-4 text-[11px] leading-relaxed text-slate-500">
           JUEJ AI Code © {new Date().getFullYear()}
         </div>
       </aside>

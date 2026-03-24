@@ -3,7 +3,10 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useCopyFeedback } from '../hooks/useCopyFeedback'
-import { hasLivePreviewContent, extractCodeBlocks } from '../lib/extractLiveCodeBlocks'
+import {
+  extractCodeBlocks,
+  hasLivePreviewContent,
+} from '../lib/extractLiveCodeBlocks'
 import type { ChatMessage, NavId } from '../types'
 import { extractFirstCodeBlock, plainTextForSpeech } from '../lib/text'
 import { LiveCodePreviewPanel } from './LiveCodePreviewPanel'
@@ -62,16 +65,16 @@ function MessageBubble({
       className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}
     >
       <div
-        className={`max-w-[min(100%,640px)] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+        className={`max-w-[min(100%,640px)] rounded-[20px] px-4 py-3.5 text-sm leading-relaxed ${
           isUser
-            ? 'bg-[#3B82F6] text-white'
-            : 'border border-[#E5E7EB] bg-white text-[#1F2937]'
+            ? 'bg-gradient-to-br from-[#3b82f6] to-[#6366f1] text-white shadow-[0_10px_40px_rgba(59,130,246,0.35)]'
+            : 'glass-panel border-white/[0.1] text-slate-200'
         }`}
       >
         {isUser ? (
           <p className="whitespace-pre-wrap">{msg.content}</p>
         ) : (
-          <div className="markdown-body text-[#1F2937] [&_h1]:mb-2 [&_h1]:mt-4 [&_h1]:text-base [&_h1]:font-semibold [&_h1]:text-[#0A0F2C] [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-[#0A0F2C] [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-[#0A0F2C] [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-semibold [&_strong]:text-[#0A0F2C] [&_a]:text-[#3B82F6] [&_a]:underline">
+          <div className="markdown-body text-slate-200 [&_h1]:mb-2 [&_h1]:mt-4 [&_h1]:text-base [&_h1]:font-semibold [&_h1]:text-white [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-white [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-slate-100 [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-semibold [&_strong]:text-white [&_a]:text-[#60a5fa] [&_a]:underline">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -80,7 +83,7 @@ function MessageBubble({
                   if (isBlock) {
                     return (
                       <code
-                        className="my-3 block overflow-x-auto rounded-lg border border-[#2D2D2D] bg-[#1E1E1E] p-4 font-mono text-[13px] leading-snug text-[#D4D4D4]"
+                        className="my-3 block overflow-x-auto rounded-xl border border-white/10 bg-[#0d1117]/90 p-4 font-mono text-[13px] leading-snug text-[#e2e8f0]"
                         {...props}
                       >
                         {children}
@@ -89,7 +92,7 @@ function MessageBubble({
                   }
                   return (
                     <code
-                      className="rounded bg-[#F3F4F6] px-1.5 py-0.5 font-mono text-[13px] text-[#0A0F2C]"
+                      className="rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-[13px] text-[#93c5fd]"
                       {...props}
                     >
                       {children}
@@ -116,26 +119,29 @@ function MessageBubble({
           </div>
         )}
         {!isUser && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#E5E7EB] pt-3">
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/[0.08] pt-3">
             <button
               type="button"
               onClick={() => void copyCode()}
-              className="inline-flex min-h-[44px] touch-manipulation items-center gap-1.5 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 text-xs font-semibold text-[#1F2937] transition hover:scale-[1.02] hover:border-[#3B82F6]/40"
+              className="btn-premium-ghost !min-h-[40px]"
             >
               <Copy className="h-3.5 w-3.5" aria-hidden />
               Kopjo kodin
             </button>
             {feedback ? (
-              <span className="text-xs font-medium text-[#3B82F6]" role="status">
+              <span
+                className="text-xs font-medium text-[#60a5fa]"
+                role="status"
+              >
                 {feedback}
               </span>
             ) : null}
             <button
               type="button"
               onClick={() => onExplainFollowUp(msg.content)}
-              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 text-xs font-semibold text-[#1F2937] transition hover:scale-[1.02] hover:border-[#3B82F6]/40"
+              className="btn-premium-ghost !min-h-[40px]"
             >
-              <Sparkles className="h-3.5 w-3.5 text-[#3B82F6]" />
+              <Sparkles className="h-3.5 w-3.5 text-[#60a5fa]" />
               Shpjego më tej
             </button>
             <button
@@ -147,10 +153,10 @@ function MessageBubble({
                   ? 'Lexo me zë shpjegimin'
                   : 'Zëri është i fikur në cilësime'
               }
-              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 text-xs font-semibold text-[#1F2937] transition hover:scale-[1.02] hover:border-[#3B82F6]/40 disabled:cursor-not-allowed disabled:opacity-40"
+              className="btn-premium-ghost !min-h-[40px] disabled:pointer-events-none disabled:opacity-35"
             >
-              <Volume2 className="h-3.5 w-3.5 shrink-0 text-[#3B82F6]" aria-hidden />
-              🔊 Lexo shpjegimin
+              <Volume2 className="h-3.5 w-3.5 shrink-0 text-[#60a5fa]" aria-hidden />
+              Lexo shpjegimin
             </button>
           </div>
         )}
@@ -196,11 +202,11 @@ export function ChatPanel({
         : 'Pyet për kod, arkitekturë ose praktika të mira...'
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#FAFAFA]">
-      <header className="flex flex-wrap items-start justify-between gap-2 border-b border-[#E5E7EB] bg-white px-4 py-3">
+    <div className="flex h-full min-h-0 flex-col bg-transparent">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] px-4 py-4 sm:px-5">
         <div>
-          <h1 className="text-base font-semibold text-[#0A0F2C]">{title}</h1>
-          <p className="text-xs text-[#1F2937]/60">
+          <h1 className="text-lg font-bold tracking-tight text-white">{title}</h1>
+          <p className="mt-1 text-sm text-[#94a3b8]">
             Mentori yt: kod i pastër, shpjegim hap pas hapi, përmirësime.
           </p>
         </div>
@@ -209,24 +215,20 @@ export function ChatPanel({
             <button
               type="button"
               onClick={onOpenCompare}
-              className="min-h-[40px] rounded-lg border border-[#3B82F6]/35 bg-[#3B82F6]/10 px-3 text-xs font-semibold text-[#1D4ED8] transition hover:scale-[1.02] hover:border-[#3B82F6]/50"
+              className="btn-premium-ghost !border-[#3b82f6]/35 !text-[#93c5fd] hover:!shadow-[0_0_20px_rgba(59,130,246,0.2)]"
             >
               Compare AI
             </button>
           )}
-          <button
-            type="button"
-            onClick={onNewChat}
-            className="min-h-[40px] rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] px-3 text-xs font-semibold text-[#0A0F2C] transition hover:scale-[1.02] hover:border-[#3B82F6]/40"
-          >
+          <button type="button" onClick={onNewChat} className="btn-premium-ghost">
             Bisedë e re
           </button>
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
         {visible.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-[#E5E7EB] bg-white p-6 text-center text-sm text-[#1F2937]/65">
+          <div className="glass-panel-subtle border border-dashed border-white/[0.12] p-8 text-center text-sm text-[#94a3b8]">
             Nuk ka mesazhe ende. Shkruaj një pyetje ose përdor menunë për të
             shpjeguar ose debuguar kodin nga redaktori.
           </div>
@@ -241,27 +243,27 @@ export function ChatPanel({
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="flex items-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 shadow-sm">
-              <Loader2 className="h-4 w-4 animate-spin text-[#3B82F6]" />
+            <div className="glass-panel-subtle flex items-center gap-3 px-4 py-3.5">
+              <Loader2 className="h-4 w-4 animate-spin text-[#60a5fa]" />
               <div className="flex gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#3B82F6] animate-typing-dot" />
-                <span className="h-1.5 w-1.5 rounded-full bg-[#3B82F6] animate-typing-dot" />
-                <span className="h-1.5 w-1.5 rounded-full bg-[#3B82F6] animate-typing-dot" />
+                <span className="h-1.5 w-1.5 rounded-full bg-[#60a5fa] animate-typing-dot" />
+                <span className="h-1.5 w-1.5 rounded-full bg-[#60a5fa] animate-typing-dot" />
+                <span className="h-1.5 w-1.5 rounded-full bg-[#60a5fa] animate-typing-dot" />
               </div>
-              <span className="text-xs text-[#1F2937]/60">Duke menduar…</span>
+              <span className="text-xs text-[#94a3b8]">Duke menduar…</span>
             </div>
           </div>
         )}
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 backdrop-blur-sm">
             {error}
           </div>
         )}
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-[#E5E7EB] bg-white p-3 sm:p-4">
-        <div className="flex gap-2">
+      <div className="border-t border-white/[0.06] bg-[#0b0f1a]/40 p-3 backdrop-blur-xl sm:p-4">
+        <div className="flex gap-3">
           <textarea
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
@@ -276,19 +278,19 @@ export function ChatPanel({
             autoComplete="off"
             spellCheck
             enterKeyHint="send"
-            className="relative z-[1] min-h-[52px] flex-1 resize-none rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-sm text-[#1F2937] shadow-inner transition placeholder:text-[#1F2937]/40 focus:border-[#3B82F6] focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/20"
+            className="premium-input min-h-[52px] flex-1 resize-none shadow-inner"
           />
           <button
             type="button"
             onClick={onSend}
             disabled={loading || !input.trim()}
-            className="inline-flex min-h-[52px] min-w-[52px] shrink-0 touch-manipulation items-center justify-center self-end rounded-xl bg-[#0A0F2C] text-white shadow-[0_4px_14px_rgba(10,15,44,0.15)] transition duration-200 hover:scale-[1.02] hover:bg-[#121836] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+            className="btn-premium-primary !min-h-[52px] !min-w-[52px] shrink-0 !p-0"
             aria-label="Dërgo"
           >
             <Send className="h-5 w-5" />
           </button>
         </div>
-        <p className="mt-2 text-center text-[10px] text-[#1F2937]/45">
+        <p className="mt-2 text-center text-[10px] text-slate-500">
           Enter për të dërguar · Shift+Enter për rresht të ri
         </p>
       </div>

@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "juej-ai-studio"
-  }
+    "default": "juej-ai-studio",
+    "Enter alias:": "juej-ai-studio"
+  },
+  "targets": {},
+  "etags": {}
 }

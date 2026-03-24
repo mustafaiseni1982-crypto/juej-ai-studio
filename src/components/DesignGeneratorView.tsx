@@ -8,29 +8,16 @@ import {
   type DesignPayload,
 } from '../lib/designPayload'
 import { useCopyFeedback } from '../hooks/useCopyFeedback'
-import { openAiProxyEnabled } from '../lib/env'
 import { chatCompletion } from '../lib/openai'
 import { DESIGN_SYSTEM } from '../lib/prompts'
 
 type DesignTab = 'preview' | 'code' | 'explanation'
 
 interface DesignGeneratorViewProps {
-  apiKey: string
   model: string
-  /** Kur është true, përdoret vetëm OpenRouter (jo OpenAI key). */
-  useOpenRouter?: boolean
-  /** Nëse është vendosur, kërkesat kalojnë në OpenRouter në vend të OpenAI të drejtpërdrejtë. */
-  openRouterKey?: string
-  onNeedSettings: () => void
 }
 
-export function DesignGeneratorView({
-  apiKey,
-  model,
-  useOpenRouter = false,
-  openRouterKey,
-  onNeedSettings,
-}: DesignGeneratorViewProps) {
+export function DesignGeneratorView({ model }: DesignGeneratorViewProps) {
   const [prompt, setPrompt] = useState('')
   const [includeJs, setIncludeJs] = useState(false)
   const [tab, setTab] = useState<DesignTab>('preview')
@@ -48,22 +35,6 @@ export function DesignGeneratorView({
   const generate = useCallback(async () => {
     const text = prompt.trim()
     if (!text || busy) return
-    if (!openAiProxyEnabled) {
-      const or = openRouterKey?.trim()
-      if (useOpenRouter) {
-        if (!or) {
-          onNeedSettings()
-          setError('Fut OpenRouter API Key te cilësimet dhe ruaj.')
-          return
-        }
-      } else if (!or && !apiKey.trim()) {
-        onNeedSettings()
-        setError(
-          'Shto OpenRouter ose OpenAI API Key te cilësimet, ose aktivizo proxy të serverit.',
-        )
-        return
-      }
-    }
     setBusy(true)
     setError(null)
     setRawReply(null)
@@ -78,11 +49,7 @@ export function DesignGeneratorView({
           { role: 'system', content: DESIGN_SYSTEM },
           { role: 'user', content: userMsg },
         ],
-        apiKey,
         model,
-        openRouterKey?.trim()
-          ? { openRouterKey: openRouterKey.trim() }
-          : undefined,
       )
       setRawReply(reply)
       const parsed = parseDesignResponse(reply)
@@ -96,21 +63,13 @@ export function DesignGeneratorView({
       setPayload(parsed)
       setTab('preview')
     } catch (e) {
+      console.error(e)
       setPayload(null)
       setError(e instanceof Error ? e.message : 'Gabim i panjohur.')
     } finally {
       setBusy(false)
     }
-  }, [
-    apiKey,
-    busy,
-    includeJs,
-    model,
-    onNeedSettings,
-    openRouterKey,
-    prompt,
-    useOpenRouter,
-  ])
+  }, [busy, includeJs, model, prompt])
 
   const downloadHtml = useCallback(() => {
     if (!payload) return
@@ -131,15 +90,15 @@ export function DesignGeneratorView({
   ]
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#FAFAFA] lg:flex-row">
-      <section className="flex w-full shrink-0 flex-col border-b border-[#E5E7EB] bg-white lg:w-[min(100%,400px)] lg:border-b-0 lg:border-r">
-        <div className="border-b border-[#E5E7EB] px-4 py-4">
-          <h1 className="text-base font-semibold text-[#0A0F2C]">Design</h1>
-          <p className="mt-1 text-xs text-[#1F2937]/60">
+    <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <section className="flex w-full shrink-0 flex-col border-b border-white/[0.08] bg-white/[0.03] backdrop-blur-xl lg:w-[min(100%,420px)] lg:border-b-0 lg:border-r lg:border-white/[0.08]">
+        <div className="border-b border-white/[0.06] px-5 py-5">
+          <h1 className="text-lg font-bold tracking-tight text-white">Design</h1>
+          <p className="mt-1.5 text-sm text-[#94a3b8]">
             Përshkruaj UI-in; merr parapamje, kod dhe shpjegim.
           </p>
         </div>
-        <div className="flex flex-1 flex-col gap-4 p-4">
+        <div className="flex flex-1 flex-col gap-4 p-5">
           <label className="sr-only" htmlFor="design-prompt">
             Përshkrimi i dizajnit
           </label>
@@ -152,18 +111,18 @@ export function DesignGeneratorView({
             rows={8}
             autoComplete="off"
             spellCheck
-            className="relative z-[1] min-h-[160px] w-full resize-y rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-sm text-[#1F2937] shadow-inner transition placeholder:text-[#1F2937]/40 focus:border-[#3B82F6] focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/20 disabled:opacity-60"
+            className="premium-input relative z-[1] min-h-[160px] w-full resize-y shadow-inner disabled:opacity-50"
           />
 
-          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] px-4 py-3 transition hover:border-[#3B82F6]/25">
+          <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3.5 transition hover:border-[#3b82f6]/25 hover:bg-white/[0.05]">
             <input
               type="checkbox"
               checked={includeJs}
               onChange={(e) => setIncludeJs(e.target.checked)}
               disabled={busy}
-              className="h-4 w-4 rounded border-[#E5E7EB] text-[#3B82F6] focus:ring-[#3B82F6]/30"
+              className="h-4 w-4 rounded border-white/20 bg-black/30 text-[#3b82f6] focus:ring-[#3b82f6]/40"
             />
-            <span className="text-sm font-medium text-[#1F2937]">
+            <span className="text-sm font-medium text-slate-200">
               Gjenero edhe JS (interaksione)
             </span>
           </label>
@@ -172,7 +131,7 @@ export function DesignGeneratorView({
             type="button"
             onClick={() => void generate()}
             disabled={busy || !prompt.trim()}
-            className="inline-flex min-h-[48px] w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-[#3B82F6] text-sm font-semibold text-white shadow-[0_4px_14px_rgba(59,130,246,0.22)] transition duration-200 hover:scale-[1.02] hover:bg-[#2563EB] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+            className="btn-premium-primary w-full"
           >
             {busy ? (
               <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
@@ -183,18 +142,18 @@ export function DesignGeneratorView({
           </button>
 
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 backdrop-blur-sm">
               {error}
             </div>
           )}
         </div>
       </section>
 
-      <section className="flex min-h-[min(50vh,480px)] min-w-0 flex-1 flex-col bg-white lg:min-h-0">
+      <section className="flex min-h-[min(50vh,480px)] min-w-0 flex-1 flex-col bg-[#0b0f1a]/50 lg:min-h-0">
         <div
           role="tablist"
           aria-label="Rezultati i dizajnit"
-          className="flex shrink-0 gap-1 border-b border-[#E5E7EB] px-2 pt-2 sm:px-4"
+          className="flex shrink-0 gap-1 border-b border-white/[0.06] px-3 pt-3 sm:px-4"
         >
           {tabs.map((t) => (
             <button
@@ -203,10 +162,10 @@ export function DesignGeneratorView({
               role="tab"
               aria-selected={tab === t.id}
               onClick={() => setTab(t.id)}
-              className={`min-h-[44px] rounded-t-lg px-4 py-2 text-sm font-semibold transition duration-200 hover:scale-[1.02] ${
+              className={`min-h-[44px] rounded-t-xl px-4 py-2 text-sm font-semibold transition duration-200 ${
                 tab === t.id
-                  ? 'bg-[#3B82F6] text-white shadow-[0_2px_8px_rgba(59,130,246,0.2)]'
-                  : 'text-[#1F2937]/70 hover:bg-[#F3F4F6]'
+                  ? 'premium-tab-active text-white'
+                  : 'text-[#94a3b8] hover:bg-white/[0.05] hover:text-slate-200'
               }`}
             >
               {t.label}
@@ -219,7 +178,7 @@ export function DesignGeneratorView({
             <div className="flex h-full min-h-[280px] flex-col">
               <iframe
                 title="Parapamje dizajni"
-                className="h-full w-full flex-1 border-0 bg-[#F3F4F6]"
+                className="h-full w-full flex-1 border-0 bg-[#0d1117]"
                 sandbox="allow-scripts allow-same-origin"
                 srcDoc={
                   srcDoc ??
@@ -230,67 +189,67 @@ export function DesignGeneratorView({
           )}
 
           {tab === 'code' && (
-            <div className="h-full overflow-y-auto p-4 space-y-6">
+            <div className="h-full overflow-y-auto space-y-6 p-4">
               {copyFeedback ? (
-                <p className="text-center text-sm font-medium text-[#3B82F6]">
+                <p className="text-center text-sm font-medium text-[#60a5fa]">
                   {copyFeedback}
                 </p>
               ) : null}
               {!payload ? (
-                <p className="text-center text-sm text-[#1F2937]/55">
+                <p className="text-center text-sm text-[#94a3b8]">
                   Kodi shfaqet pasi të gjenerosh një dizajn.
                 </p>
               ) : (
                 <>
                   <div>
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs font-bold uppercase tracking-wider text-[#0A0F2C]">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                         HTML
                       </span>
                       <button
                         type="button"
                         onClick={() => void copySnippet(payload.html)}
-                        className="touch-manipulation rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] px-3 py-2 text-xs font-semibold text-[#1F2937] transition hover:scale-[1.02] hover:border-[#3B82F6]/40"
+                        className="btn-premium-ghost !min-h-[36px] !px-3 !py-2 !text-xs"
                       >
                         Copy
                       </button>
                     </div>
-                    <pre className="max-h-[220px] overflow-auto rounded-xl border border-[#E5E7EB] bg-[#1E1E1E] p-4 font-mono text-[13px] leading-relaxed text-[#D4D4D4]">
+                    <pre className="max-h-[220px] overflow-auto rounded-2xl border border-white/10 bg-[#0d1117] p-4 font-mono text-[13px] leading-relaxed text-[#e2e8f0]">
                       {payload.html}
                     </pre>
                   </div>
                   <div>
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs font-bold uppercase tracking-wider text-[#0A0F2C]">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                         CSS
                       </span>
                       <button
                         type="button"
                         onClick={() => void copySnippet(payload.css)}
-                        className="touch-manipulation rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] px-3 py-2 text-xs font-semibold text-[#1F2937] transition hover:scale-[1.02] hover:border-[#3B82F6]/40"
+                        className="btn-premium-ghost !min-h-[36px] !px-3 !py-2 !text-xs"
                       >
                         Copy
                       </button>
                     </div>
-                    <pre className="max-h-[220px] overflow-auto rounded-xl border border-[#E5E7EB] bg-[#1E1E1E] p-4 font-mono text-[13px] leading-relaxed text-[#D4D4D4]">
+                    <pre className="max-h-[220px] overflow-auto rounded-2xl border border-white/10 bg-[#0d1117] p-4 font-mono text-[13px] leading-relaxed text-[#e2e8f0]">
                       {payload.css}
                     </pre>
                   </div>
                   {payload.javascript.trim() ? (
                     <div>
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-[#0A0F2C]">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                           JavaScript
                         </span>
                         <button
                           type="button"
                           onClick={() => void copySnippet(payload.javascript)}
-                          className="touch-manipulation rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] px-3 py-2 text-xs font-semibold text-[#1F2937] transition hover:scale-[1.02] hover:border-[#3B82F6]/40"
+                          className="btn-premium-ghost !min-h-[36px] !px-3 !py-2 !text-xs"
                         >
                           Copy
                         </button>
                       </div>
-                      <pre className="max-h-[180px] overflow-auto rounded-xl border border-[#E5E7EB] bg-[#1E1E1E] p-4 font-mono text-[13px] leading-relaxed text-[#D4D4D4]">
+                      <pre className="max-h-[180px] overflow-auto rounded-2xl border border-white/10 bg-[#0d1117] p-4 font-mono text-[13px] leading-relaxed text-[#e2e8f0]">
                         {payload.javascript}
                       </pre>
                     </div>
@@ -298,7 +257,7 @@ export function DesignGeneratorView({
                   <button
                     type="button"
                     onClick={downloadHtml}
-                    className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-[#0A0F2C] text-sm font-semibold text-white transition hover:scale-[1.02] hover:bg-[#121836]"
+                    className="btn-premium-primary w-full"
                   >
                     <Download className="h-4 w-4" aria-hidden />
                     Download
@@ -311,18 +270,18 @@ export function DesignGeneratorView({
           {tab === 'explanation' && (
             <div className="h-full overflow-y-auto p-4 sm:p-6">
               {!payload?.explanation ? (
-                <p className="text-center text-sm text-[#1F2937]/55">
+                <p className="text-center text-sm text-[#94a3b8]">
                   Shpjegimi shfaqet pasi të gjenerosh një dizajn.
                 </p>
               ) : (
-                <div className="markdown-body text-sm text-[#1F2937] [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-semibold [&_h1]:text-[#0A0F2C] [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-[#0A0F2C] [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-semibold [&_strong]:text-[#0A0F2C]">
+                <div className="markdown-body text-sm text-slate-300 [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-semibold [&_h1]:text-white [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-white [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-semibold [&_strong]:text-white [&_a]:text-[#60a5fa]">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {payload.explanation}
                   </ReactMarkdown>
                 </div>
               )}
               {rawReply && !payload?.explanation && error && (
-                <p className="mt-4 text-xs text-[#1F2937]/45">
+                <p className="mt-4 text-xs text-slate-500">
                   Shiko skedën Code ose provo përsëri — përgjigja e plotë mund të
                   jetë e papërpunuar.
                 </p>

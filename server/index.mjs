@@ -1,7 +1,7 @@
 /**
  * Proxy për OpenAI + /api/ai shumë-furnizues (OpenAI, Anthropic, DeepSeek).
- * Nis: npm run server
- * Me Vite: VITE_OPENAI_PROXY=true + proxy në vite.config
+ * Nis: npm run server / npm start
+ * Frontend: VITE_API_BASE_URL=https://<railway-host> (pa slash në fund).
  */
 import http from 'node:http'
 
@@ -148,19 +148,32 @@ function getVisionImageUrlFromBody(body) {
   return { mode: 'url', url: `data:${mime};base64,${b64}` }
 }
 
+/**
+ * CORS: reflekso vetëm origjina të vlefshme (https / dev). Përndryshe `*`.
+ * Railway/proxy nganjëherë nuk përcjell `Origin` si URL — ose vjen si string "null",
+ * që shkaktonte `Access-Control-Allow-Origin: null` dhe Safari/Firefox bllokonin fetch.
+ */
+function getRequestOrigin(req) {
+  const raw = req.headers.origin
+  if (raw == null) return ''
+  if (Array.isArray(raw)) return String(raw[0] ?? '').trim()
+  return String(raw).trim()
+}
+
 function allowOrigin(origin) {
-  if (!origin) return '*'
-  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))
+  if (!origin || origin === 'null') return '*'
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin))
     return origin
-  return 'null'
+  if (/^https:\/\/.+/i.test(origin)) return origin
+  return '*'
 }
 
 function corsHeaders(req) {
-  const origin = req.headers.origin ?? ''
   return {
-    'Access-Control-Allow-Origin': allowOrigin(origin),
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Origin': allowOrigin(getRequestOrigin(req)),
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
   }
 }
 
@@ -510,18 +523,19 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method !== 'POST' || path !== '/api/chat') {
-    res.writeHead(404, { 'Content-Type': 'application/json', ...cors })
-    res.end(JSON.stringify({ error: 'Not found' }))
+    json(res, 404, cors, { error: { message: 'Not found' } })
     return
   }
 
-  if (!OPENROUTER_KEY && !OPENAI_KEY) {
+  /** Çelësi personal nga klienti zëvendëson OPENROUTER_KEY — mos e blloko para leximit të Bearer. */
+  const chatBearer = extractBearerToken(req)
+  if (!OPENROUTER_KEY && !OPENAI_KEY && !chatBearer) {
     res.writeHead(500, { 'Content-Type': 'application/json', ...cors })
     res.end(
       JSON.stringify({
         error: {
           message:
-            'Vendos OPENROUTER_API_KEY ose OPENAI_API_KEY në mjedis përpara se të nisësh serverin.',
+            'Vendos OPENROUTER_API_KEY ose OPENAI_API_KEY në Render, ose fut OpenRouter API Key te Cilësimet në aplikacion.',
         },
       }),
     )

@@ -36,9 +36,7 @@ export function CodeEditorPanel({
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
 
   const codeNav =
-    navMode === 'editor' ||
-    navMode === 'explain' ||
-    navMode === 'debug'
+    navMode === 'editor' || navMode === 'explain' || navMode === 'debug'
 
   useEffect(() => {
     if (!codeNav) return
@@ -79,8 +77,8 @@ export function CodeEditorPanel({
         : 'Shkruaj ose ngjit kodin. Për HTML/JS/CSS mund të përdorësh Ekzekuto.'
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#E5E7EB] px-3 py-2 sm:px-4">
+    <div className="flex h-full min-h-0 flex-col border-l border-white/[0.06] bg-[#0b0f1a]/50">
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.06] bg-[#0b0f1a]/60 px-3 py-2.5 backdrop-blur-xl sm:px-4">
         <label className="sr-only" htmlFor="lang-select">
           Gjuha e kodit
         </label>
@@ -88,7 +86,7 @@ export function CodeEditorPanel({
           id="lang-select"
           value={language}
           onChange={(e) => onLanguageChange(e.target.value as EditorLanguage)}
-          className="min-h-[44px] rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-medium text-[#1F2937] shadow-sm transition hover:border-[#3B82F6]/40 focus:border-[#3B82F6] focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/20"
+          className="premium-input premium-select min-h-[44px] max-w-[160px] cursor-pointer text-sm font-medium"
         >
           {LANG_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -100,47 +98,44 @@ export function CodeEditorPanel({
           <button
             type="button"
             onClick={onRun}
-            className="inline-flex min-h-[44px] touch-manipulation items-center gap-2 rounded-lg bg-[#3B82F6] px-4 text-sm font-semibold text-white shadow-[0_2px_8px_rgba(59,130,246,0.2)] transition duration-200 hover:scale-[1.02] hover:bg-[#2563EB] active:scale-[0.98]"
+            className="btn-premium-primary !min-h-[44px] !rounded-xl !px-4 !text-sm"
           >
             <Play className="h-4 w-4" aria-hidden />
             Ekzekuto
           </button>
-          <button
-            type="button"
-            onClick={() => runFormat()}
-            className="inline-flex min-h-[44px] touch-manipulation items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-medium text-[#1F2937] transition duration-200 hover:scale-[1.02] hover:border-[#3B82F6]/30 hover:bg-[#F9FAFB]"
-          >
-            <Wand2 className="h-4 w-4 text-[#3B82F6]" aria-hidden />
+          <button type="button" onClick={() => runFormat()} className="btn-premium-ghost">
+            <Wand2 className="h-4 w-4 text-[#60a5fa]" aria-hidden />
             Formatizo
           </button>
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex min-h-[44px] touch-manipulation items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-medium text-[#1F2937] transition duration-200 hover:scale-[1.02] hover:border-red-200 hover:bg-red-50"
+            className="btn-premium-ghost hover:!border-red-400/30 hover:!text-red-300"
           >
             <Eraser className="h-4 w-4" aria-hidden />
             Pastro
           </button>
         </div>
       </div>
-      <p className="flex items-start gap-2 border-b border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2 text-xs text-[#1F2937]/70">
-        <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#3B82F6]" />
+      <p className="flex items-start gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-xs text-[#94a3b8]">
+        <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#60a5fa]" />
         {hint}
       </p>
-      <div className="relative z-0 flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="relative z-0 flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0d1117]">
         <Editor
           height="100%"
           language={language}
           value={value}
           onChange={(v) => onChange(v ?? '')}
           onMount={handleMount}
-          theme="light"
+          theme="vs-dark"
           options={{
             readOnly: false,
             domReadOnly: false,
             minimap: { enabled: false },
             fontSize: 14,
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+            fontFamily:
+              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
             scrollBeyondLastLine: false,
             padding: { top: 12, bottom: 12 },
             smoothScrolling: true,
@@ -148,6 +143,7 @@ export function CodeEditorPanel({
             automaticLayout: true,
             fixedOverflowWidgets: true,
             tabSize: 2,
+            cursorBlinking: 'smooth',
           }}
         />
       </div>

@@ -40,25 +40,13 @@ export interface Conversation {
   updatedAt: number
 }
 
+/** Çelësat AI janë vetëm në backend (Railway); asgjë nuk ruhet për API në localStorage. */
 export interface AppSettings {
-  apiKey: string
   model: 'gpt-4o' | 'gpt-4o-mini'
   voiceEnabled: boolean
-  /** Një çelës për OpenRouter (GPT, Claude, DeepSeek etj.) — pa proxy. */
-  useOpenRouter: boolean
-  openRouterApiKey: string
-  /** Për krahasim Claude kur nuk përdoret proxy dhe nuk përdoret OpenRouter. */
-  anthropicApiKey: string
-  /** Për krahasim DeepSeek kur nuk përdoret proxy dhe nuk përdoret OpenRouter. */
-  deepseekApiKey: string
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  apiKey: '',
   model: 'gpt-4o-mini',
   voiceEnabled: true,
-  useOpenRouter: false,
-  openRouterApiKey: '',
-  anthropicApiKey: '',
-  deepseekApiKey: '',
 }
