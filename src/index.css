@@ -1,0 +1,71 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-juej-primary: #0a0f2c;
+  --color-juej-accent: #3b82f6;
+  --color-juej-white: #ffffff;
+  --color-juej-gray-light: #e5e7eb;
+  --color-juej-gray-dark: #1f2937;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Monaco, Consolas, monospace;
+}
+
+html {
+  height: 100%;
+  height: -webkit-fill-available;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+}
+
+body {
+  min-height: 100%;
+  min-height: -webkit-fill-available;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--color-juej-white);
+  color: var(--color-juej-gray-dark);
+  /* iPhone notch / home indicator në “Add to Home Screen” */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+#root {
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+/* Monaco minimap / scrollbar subtle */
+.monaco-editor .margin {
+  background-color: #fafafa !important;
+}
+
+@keyframes typing-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.animate-typing-dot {
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+
+.animate-typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.animate-typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
